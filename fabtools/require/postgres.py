@@ -12,7 +12,7 @@ from fabtools.postgres import (
     database_exists,
     user_exists,
 )
-from fabtools.require.deb import package
+from fabtools.require.rpm import package
 from fabtools.require.service import started, restarted
 from fabtools.require.system import locale as require_locale
 
