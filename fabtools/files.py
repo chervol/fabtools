@@ -2,7 +2,6 @@
 Files and directories
 =====================
 """
-from __future__ import with_statement
 
 from pipes import quote
 import os
@@ -98,6 +97,19 @@ def mode(path, use_sudo=False):
             return func('stat -f %%Op "%(path)s"|cut -c 4-6' % locals())
         else:
             return result
+
+
+def umask(use_sudo=False):
+    """
+    Get the user's umask.
+
+    Returns a string such as ``'0002'``, representing the user's umask
+    as an octal number.
+
+    If `use_sudo` is `True`, this function returns root's umask.
+    """
+    func = use_sudo and run_as_root or run
+    return func('umask')
 
 
 def upload_template(filename, destination, context=None, use_jinja=False,
@@ -263,3 +275,49 @@ def uncommented_lines(filename, use_sudo=False):
                 if line and not line.startswith('#')]
     else:
         return []
+
+
+def getmtime(path, use_sudo=False):
+    """
+    Return the time of last modification of path.
+    The return value is a number giving the number of seconds since the epoch
+
+    Same as :py:func:`os.path.getmtime()`
+    """
+    func = use_sudo and run_as_root or run
+    with settings(hide('running', 'stdout')):
+        return int(func('stat -c %%Y "%(path)s" ' % locals()).strip())
+
+
+def copy(source, destination, recursive=False, use_sudo=False):
+    """
+    Copy a file or directory
+    """
+    func = use_sudo and run_as_root or run
+    options = '-r' if recursive else ''
+    func('/bin/cp {} {} {}'.format(options, quote(source), quote(destination)))
+
+
+def move(source, destination, use_sudo=False):
+    """
+    Move a file or directory
+    """
+    func = use_sudo and run_as_root or run
+    func('/bin/mv {} {}'.format(quote(source), quote(destination)))
+
+
+def symlink(source, destination, use_sudo=False):
+    """
+    Create a symbolic link to a file or directory
+    """
+    func = use_sudo and run_as_root or run
+    func('/bin/ln -s {} {}'.format(quote(source), quote(destination)))
+
+
+def remove(path, recursive=False, use_sudo=False):
+    """
+    Remove a file or directory
+    """
+    func = use_sudo and run_as_root or run
+    options = '-r' if recursive else ''
+    func('/bin/rm {} {}'.format(options, quote(path)))

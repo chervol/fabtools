@@ -2,14 +2,13 @@
 Python environments and packages
 ================================
 
-This module includes tools for using `virtual environments`_
-and installing packages using `pip`_.
+This module provides tools for using Python `virtual environments`_
+and installing Python packages using the `pip`_ installer.
 
 .. _virtual environments: http://www.virtualenv.org/
 .. _pip: http://www.pip-installer.org/
 
 """
-from __future__ import with_statement
 
 from contextlib import contextmanager
 from distutils.version import StrictVersion as V
@@ -22,7 +21,10 @@ from fabric.api import cd, hide, prefix, run, settings, sudo
 from fabric.utils import puts
 
 from fabtools.files import is_file
-from fabtools.utils import abspath, run_as_root
+from fabtools.utils import abspath, download, run_as_root
+
+
+GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py'
 
 
 def is_pip_installed(version=None, pip_cmd='pip'):
@@ -70,7 +72,7 @@ def install_pip(python_cmd='python', use_sudo=True):
 
     with cd('/tmp'):
 
-        run('curl --silent -O https://raw.github.com/pypa/pip/master/contrib/get-pip.py')
+        download(GET_PIP_URL)
 
         command = '%(python_cmd)s get-pip.py' % locals()
         if use_sudo:
@@ -79,6 +81,7 @@ def install_pip(python_cmd='python', use_sudo=True):
             run(command, pty=False)
 
         run('rm -f get-pip.py')
+
 
 def is_installed(package, pip_cmd='pip'):
     """
@@ -103,12 +106,19 @@ def is_installed(package, pip_cmd='pip'):
     return (package.lower() in packages)
 
 
-def install(packages, upgrade=False, use_mirrors=False, use_sudo=False,
-            user=None, download_cache=None, quiet=False, pip_cmd='pip'):
+def install(packages, upgrade=False, download_cache=None, allow_external=None,
+            allow_unverified=None, quiet=False, pip_cmd='pip', use_sudo=False,
+            user=None, exists_action=None):
     """
     Install Python package(s) using `pip`_.
 
     Package names are case insensitive.
+
+    Starting with version 1.5, pip no longer scrapes insecure external
+    urls by default and no longer installs externally hosted files by
+    default. Use ``allow_external=['foo', 'bar']`` or
+    ``allow_unverified=['bar', 'baz']`` to change these behaviours
+    for specific packages.
 
     Examples::
 
@@ -122,19 +132,35 @@ def install(packages, upgrade=False, use_mirrors=False, use_sudo=False,
 
     .. _pip: http://www.pip-installer.org/
     """
-    if not isinstance(packages, basestring):
-        packages = ' '.join(packages)
+    if isinstance(packages, basestring):
+        packages = [packages]
+
+    if allow_external in (None, False):
+        allow_external = []
+    elif allow_external is True:
+        allow_external = packages
+
+    if allow_unverified in (None, False):
+        allow_unverified = []
+    elif allow_unverified is True:
+        allow_unverified = packages
 
     options = []
-    if use_mirrors:
-        options.append('--use-mirrors')
     if upgrade:
         options.append('--upgrade')
     if download_cache:
         options.append('--download-cache="%s"' % download_cache)
     if quiet:
         options.append('--quiet')
+    for package in allow_external:
+        options.append('--allow-external="%s"' % package)
+    for package in allow_unverified:
+        options.append('--allow-unverified="%s"' % package)
+    if exists_action:
+        options.append('--exists-action=%s' % exists_action)
     options = ' '.join(options)
+
+    packages = ' '.join(packages)
 
     command = '%(pip_cmd)s install %(options)s %(packages)s' % locals()
 
@@ -144,9 +170,10 @@ def install(packages, upgrade=False, use_mirrors=False, use_sudo=False,
         run(command, pty=False)
 
 
-def install_requirements(filename, upgrade=False, use_mirrors=False,
-                         use_sudo=False, user=None, download_cache=None,
-                         quiet=False, pip_cmd='pip'):
+def install_requirements(filename, upgrade=False, download_cache=None,
+                         allow_external=None, allow_unverified=None,
+                         quiet=False, pip_cmd='pip', use_sudo=False,
+                         user=None, exists_action=None):
     """
     Install Python packages from a pip `requirements file`_.
 
@@ -158,15 +185,25 @@ def install_requirements(filename, upgrade=False, use_mirrors=False,
 
     .. _requirements file: http://www.pip-installer.org/en/latest/requirements.html
     """
+    if allow_external is None:
+        allow_external = []
+
+    if allow_unverified is None:
+        allow_unverified = []
+
     options = []
-    if use_mirrors:
-        options.append('--use-mirrors')
     if upgrade:
         options.append('--upgrade')
     if download_cache:
         options.append('--download-cache="%s"' % download_cache)
+    for package in allow_external:
+        options.append('--allow-external="%s"' % package)
+    for package in allow_unverified:
+        options.append('--allow-unverified="%s"' % package)
     if quiet:
         options.append('--quiet')
+    if exists_action:
+        options.append('--exists-action=%s' % exists_action)
     options = ' '.join(options)
 
     command = '%(pip_cmd)s install %(options)s -r %(filename)s' % locals()
@@ -239,7 +276,7 @@ def virtualenv(directory, local=False):
     path_mod = os.path if local else posixpath
 
     # Build absolute path to the virtualenv activation script
-    venv_path = abspath(directory)
+    venv_path = abspath(directory, local)
     activate_path = path_mod.join(venv_path, 'bin', 'activate')
 
     # Source the activation script

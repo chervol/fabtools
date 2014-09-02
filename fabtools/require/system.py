@@ -2,7 +2,6 @@
 System settings
 ===============
 """
-from __future__ import with_statement
 
 from re import escape
 
@@ -11,6 +10,7 @@ from fabric.contrib.files import append, uncomment
 
 from fabtools.files import is_file, watch
 from fabtools.system import (
+    UnsupportedFamily,
     distrib_family, distrib_id,
     get_hostname, set_hostname,
     get_sysctl, set_sysctl,
@@ -59,7 +59,7 @@ def locales(names):
         if not is_file(config_file):
             run_as_root('touch %s' % config_file)
     else:
-         config_file = '/etc/locale.gen'
+        config_file = '/etc/locale.gen'
 
     # Regenerate locales if config file changes
     with watch(config_file, use_sudo=True) as config:
@@ -76,10 +76,13 @@ def locales(names):
                 warn('Unsupported locale name "%s"' % name)
 
     if config.changed:
-        if distrib_id() == "Archlinux":
+        family = distrib_family()
+        if family == 'debian':
+            run_as_root('dpkg-reconfigure --frontend=noninteractive locales')
+        elif family in ['arch', 'gentoo']:
             run_as_root('locale-gen')
         else:
-            run_as_root('dpkg-reconfigure --frontend=noninteractive locales')
+            raise UnsupportedFamily(supported=['debian', 'arch', 'gentoo'])
 
 
 def locale(name):
@@ -100,7 +103,7 @@ def default_locale(name):
 
     # Make it the default
     contents = 'LANG="%s"\n' % name
-    if distrib_id() == "Archlinux":
+    if distrib_family() == 'arch':
         config_file = '/etc/locale.conf'
     else:
         config_file = '/etc/default/locale'

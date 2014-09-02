@@ -2,7 +2,6 @@
 PostgreSQL users and databases
 ==============================
 """
-from __future__ import with_statement
 
 from fabric.api import cd, hide, run, settings
 from fabtools.files import is_file
@@ -54,9 +53,10 @@ def user(name, password, superuser=False, createdb=False,
          createrole=False, inherit=True, login=True, connection_limit=None,
          encrypted_password=False):
     """
-    Require the existence of a PostgreSQL user. The password and options
-    provided will only be applied when creating a new user (existing
-    users will *not* be modified).
+    Require the existence of a PostgreSQL user.
+
+    The password and options provided will only be applied when creating
+    a new user (existing users will *not* be modified).
 
     ::
 
